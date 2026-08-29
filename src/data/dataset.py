@@ -218,7 +218,12 @@ class SimJEBDataset(Dataset):
                 f"{missing[:5]}{'...' if len(missing) > 5 else ''}"
             )
 
-        super().__init__(root=str(self.root_dir))
+        # root=None deliberately. PyG's Dataset creates raw/ and processed/
+        # subdirectories under root, but the cache lives on a Kaggle input mount,
+        # which is read-only. Nothing here needs those directories: the graphs are
+        # built out-of-band by make_dataset.py, so there is nothing to download and
+        # nothing to process at load time.
+        super().__init__(root=None)
 
     def len(self) -> int:
         return len(self.model_ids)
@@ -235,7 +240,6 @@ class SimJEBDataset(Dataset):
             self._cache[model_id] = data
         return data
 
-    # PyG's Dataset wants these; the cache is produced out-of-band by make_dataset.py.
     @property
     def raw_file_names(self) -> list[str]:
         return []
@@ -243,9 +247,3 @@ class SimJEBDataset(Dataset):
     @property
     def processed_file_names(self) -> list[str]:
         return [f"{m}.pt" for m in self.model_ids]
-
-    def download(self) -> None:  # pragma: no cover - nothing to fetch
-        pass
-
-    def process(self) -> None:  # pragma: no cover - built by make_dataset.py
-        pass
