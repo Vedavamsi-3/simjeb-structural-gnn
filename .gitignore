@@ -1,0 +1,28 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Source data and generated caches are far too large for git.
+# The SimJEB archives are fetched from Harvard Dataverse by the Kaggle notebooks;
+# the .pt graph cache is produced by notebooks/kaggle_1_data.ipynb.
+#
+# Leading slash matters: a bare "data/" would also match src/data/, silently
+# excluding the parsing package and breaking the import on Kaggle.
+/data/
+*.zip
+*.vtk
+*.fem
+*.pt
+
+# Generated outputs, except the small committed figures and tables.
+outputs/**
+!outputs/qa/
+!outputs/qa/*.csv
+!outputs/qa/figures/
+!outputs/qa/figures/*.png
+!outputs/*.png
+!outputs/metrics.csv
+
+.DS_Store
+Thumbs.db

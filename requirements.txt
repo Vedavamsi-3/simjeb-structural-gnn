@@ -1,0 +1,27 @@
+# Local development environment (CPU only).
+#
+# Nothing trains on the local machine -- this environment exists to author code and
+# run unit tests against the single-model fixture. Training runs on Kaggle, which
+# supplies its own CUDA build of torch.
+#
+# Install torch first, from the CPU index:
+#     pip install --index-url https://download.pytorch.org/whl/cpu torch
+# then:
+#     pip install -r requirements.txt
+#
+# On a machine where antivirus intercepts HTTPS (e.g. Avast), pip needs the
+# interceptor's certificate:
+#     pip install --cert "C:\ProgramData\Avast Software\Avast\wscert.pem" ...
+
+torch>=2.0            # framework; install the CPU build locally, see above
+torch-geometric>=2.5  # graph Data/Batch, DataLoader, MessagePassing
+
+meshio>=5.3           # read the binary .vtk volume meshes
+numpy>=1.24
+pandas>=2.0           # per-node result CSVs, model_stats table
+scipy>=1.11           # Kabsch alignment, hierarchical clustering, convex hull
+scikit-learn>=1.3     # IsolationForest, StratifiedGroupKFold
+trimesh>=4.0          # surface normals, volume, area
+matplotlib>=3.7       # every figure
+
+pytest>=7.4
