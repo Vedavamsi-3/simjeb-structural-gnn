@@ -19,6 +19,19 @@ from pathlib import Path
 
 DATAVERSE = "https://dataverse.harvard.edu/api/access/datafile"
 
+# Dataverse rejects the default ``Python-urllib/x.y`` agent with HTTP 403, so every
+# request has to identify itself as something the firewall recognises. Nothing else
+# about the request matters -- the same URL fetched with curl works precisely because
+# curl sends its own agent string.
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+    ),
+    "Accept": "*/*",
+}
+TIMEOUT_SECONDS = 120
+
 # File ids within the SimJEB record (doi:10.7910/DVN/XFUWJG), with their published
 # sizes so a truncated download is caught rather than producing a corrupt archive.
 FILES = {
@@ -115,14 +128,15 @@ def download(key: str, dest: str | Path, chunk_size: int = 1 << 20,
         path.unlink()
         have = 0
 
-    request = urllib.request.Request(f"{DATAVERSE}/{file_id}")
+    request = urllib.request.Request(f"{DATAVERSE}/{file_id}", headers=HEADERS)
     if have:
         request.add_header("Range", f"bytes={have}-")
 
-    with urllib.request.urlopen(request) as response, open(path, "ab") as out:
+    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response, \
+            open(path, "ab") as out:
         shutil.copyfileobj(response, out, chunk_size)
 
-    final = path.stat().st_size
+    final = path.stat().st_size if path.exists() else 0
     if verify_size and final != expected_size:
         raise IOError(
             f"{filename}: got {final} bytes, expected {expected_size}. "
@@ -131,11 +145,33 @@ def download(key: str, dest: str | Path, chunk_size: int = 1 << 20,
     return path
 
 
-def download_all(dest: str | Path, keys: list[str] | None = None) -> dict[str, Path]:
-    """Fetch everything needed to build the dataset. Safe to re-run."""
+def download_all(dest: str | Path, keys: list[str] | None = None,
+                 attempts: int = 5) -> dict[str, Path]:
+    """Fetch everything needed to build the dataset. Safe to re-run.
+
+    Each file is retried, because Dataverse resets long connections -- four drops were
+    observed pulling the 3.3 GB of result CSVs. Every attempt resumes from whatever is
+    already on disk, so a reset costs the remainder of one chunk rather than the file.
+    """
     keys = keys or list(FILES)
     paths = {}
+
     for key in keys:
-        print(f"fetching {FILES[key][2]} ...", flush=True)
-        paths[key] = download(key, dest)
+        _, expected, filename = FILES[key]
+        print(f"fetching {filename} ({expected / 1e6:,.0f} MB) ...", flush=True)
+
+        for attempt in range(1, attempts + 1):
+            try:
+                paths[key] = download(key, dest)
+                break
+            except Exception as error:
+                have = (Path(dest) / filename).stat().st_size \
+                    if (Path(dest) / filename).exists() else 0
+                print(f"  attempt {attempt}/{attempts} failed at "
+                      f"{have / 1e6:,.0f} MB: {type(error).__name__}: {error}",
+                      flush=True)
+                if attempt == attempts:
+                    raise
+        print(f"  done: {paths[key].stat().st_size / 1e6:,.0f} MB", flush=True)
+
     return paths
