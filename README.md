@@ -7,10 +7,12 @@ Python, PyTorch, PyTorch Geometric.
 The dataset is [SimJEB](https://simjeb.github.io/): 381 crowd-sourced CAD brackets from
 the GE Jet Engine Bracket Challenge, meshed and solved with OptiStruct.
 
-> **Current status: the model does not yet beat the benchmark.** Test MAE is
-> **84.0 MPa** against the SimJEB paper's naive baseline of **60.1 MPa**. The diagnosis
-> and the planned fixes are in [`RESULTS.md`](RESULTS.md). This README documents the
-> pipeline and reports the numbers as they stand.
+> **Status.** First trained model: **84.0 MPa** test MAE on surface von Mises, under a
+> stricter split than the benchmark uses. The SimJEB paper's naive baseline is
+> **60.1 MPa** — but the two are measured differently and are **not yet like-for-like**
+> (see [Comparability](#comparability)). The pipeline, the QA stage and the split
+> protocol are complete and tested; the model is on its second iteration.
+> Diagnosis and planned work: [`RESULTS.md`](RESULTS.md).
 
 ---
 
@@ -187,15 +189,42 @@ Vertical load case, 67 held-out brackets, metrics in MPa.
 | trivial baseline R² | −0.0001 | −0.0063 | — |
 
 The paper's baseline is a degree-three polynomial in x, y, z fitted to the *average*
-field — it never looks at the geometry. Its authors write that models failing to beat
-it "effectively have no predictive value". **This model does not beat it.**
-
-The official-split figure is **not** a fair comparison: the model trained on the grouped
-split, so some official test brackets were in its training set.
+field — it never looks at the geometry. Its authors write that models failing to beat it
+"effectively have no predictive value", which makes it the right thing to measure
+against.
 
 The bootstrap interval resamples whole **models**, not nodes — nodes within a bracket
 are highly correlated, and resampling them would treat millions of dependent points as
 independent and produce an interval far too narrow to be honest.
+
+<a name="comparability"></a>
+
+### Comparability — read before quoting either number
+
+The two figures are measured under **four different conditions**, and until those are
+reconciled neither "beats" nor "loses to" the other in a strict sense.
+
+| | this repo | the paper's benchmark |
+|---|---|---|
+| **Nodes scored** | **surface only** (~40% of the mesh) | *"vertex-valued"* — appears to be **all mesh vertices** |
+| **Splits** | one **grouped** split, no design family straddling | mean over **three random 80/20** splits |
+| **Models** | 328 (53 excluded by QA, each with a reason) | all 381 |
+| **Targets** | 1 field × 1 load case | 5 fields × 4 load cases × 3 splits |
+
+Two of these should make our task **harder**, not easier: a grouped split removes the
+same-family overlap that a random split leaves in — 9 of 24 design groups straddle train
+and test in `official_split_0` — and averaging three splits smooths variance we do not
+get to smooth.
+
+The surface-versus-volume difference is the one that could go either way, and it is not
+resolved by reading the paper. **Settling it is a small script, not a training run:**
+fit the same degree-three polynomial on surface nodes only and compare like with like.
+That is the next measurement, and it decides whether 60.1 MPa is even the right target
+for a surface model.
+
+The official-split figure above is also **not** a fair comparison for a separate reason:
+the model trained on the grouped split, so some official test brackets were in its
+training set. It is reported for context, not as a benchmark result.
 
 ### What went wrong
 
@@ -217,7 +246,27 @@ against **0.381** on unflagged — identified before training, from geometry and
 statistics alone.
 
 **The trivial baseline scored −0.0001** — exactly zero, as designed. The evaluation is
-sound; the model is weak.
+sound.
+
+**The split protocol did what it was built to do.** Zero design families straddle the
+boundary, against 8 in the official split, and category balance is 7× tighter
+(±0.6% versus ±8.7%).
+
+### The dataset's authors anticipated this failure mode
+
+The stress-singularity problem is not a flaw in this model — it is a documented property
+of SimJEB, stated in the paper:
+
+> *"several meshes contain one or more elements with large aspect ratios. While
+> displacement prediction is generally robust to the presence of a few distorted
+> elements, **the accuracy of stress predictions could be improved by improving mesh
+> quality, using second-order elements, and replacing sharp corners in the geometry with
+> small fillets.**"*
+
+That is exactly what the error analysis found independently: the worst-scoring brackets
+are those with peaks above 5× yield, and RMSE sits at more than double MAE. Von Mises on
+this dataset is a genuinely harder target than displacement, and the people who built it
+say so.
 
 Full diagnosis and planned fixes: [`RESULTS.md`](RESULTS.md).
 

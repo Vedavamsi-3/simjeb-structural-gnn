@@ -21,13 +21,54 @@ the training set. It never looks at the geometry.
 > "Surrogate models that fail to beat this naive model effectively have no predictive
 > value." — SimJEB paper, §6
 
-All runs here use the **vertical** case, so **60.1 MPa is the number to beat**.
+All runs here use the **vertical** case, so **60.1 MPa is the reference point**.
+
+### But not yet on equal terms
+
+Reading the paper closely turns up four differences between its protocol and ours:
+
+| | this repo | the paper |
+|---|---|---|
+| **Nodes scored** | **surface only** (~40% of the mesh) | "vertex-valued" — apparently **all** vertices |
+| **Splits** | one **grouped** split | mean over **three random 80/20** splits |
+| **Models** | 328 (53 excluded by QA, each with a reason) | all 381 |
+| **Targets** | 1 field, 1 load case | 5 fields x 4 cases x 3 splits = 60 models |
+
+Two of these make our task *harder*, not easier. A grouped split removes the same-family
+overlap a random split leaves in — **9 of 24 design groups straddle train and test in
+`official_split_0`** — and averaging three splits smooths variance we do not get to
+smooth.
+
+**Surface-versus-volume is the open one**, and the paper does not settle it. Interior and
+surface nodes have different stress distributions, so 60.1 MPa may simply not be the
+right target for a surface-only model.
+
+**Next measurement, before any further training:** fit the same degree-three polynomial
+on surface nodes only, on our own splits. It runs on the cached data in minutes and costs
+no GPU time. Until then, 60.1 is a reference point rather than a verdict.
+
+### The paper also predicts our failure mode
+
+> "several meshes contain one or more elements with large aspect ratios. While
+> displacement prediction is generally robust to the presence of a few distorted
+> elements, **the accuracy of stress predictions could be improved by improving mesh
+> quality, using second-order elements, and replacing sharp corners in the geometry with
+> small fillets.**" — SimJEB paper, section 4.2
+
+The error analysis reached the same conclusion from the other direction: the worst
+brackets are those peaking above 5x yield, and RMSE is more than double MAE. Von Mises on
+SimJEB is a harder target than displacement, and its authors say so. That is context for
+the result, not an excuse for it.
+
+One more detail worth knowing: the design categories we stratify on are **hand-assigned**
+— the paper calls them "subjective and imperfect". Still the best available grouping
+variable, but judgement rather than measurement.
 
 ## Runs
 
 | run | val MAE | **test MAE** | test R² | vs. 60.1 baseline | epochs | verdict |
 |---|---|---|---|---|---|---|
-| `c1_baseline` | 59.5 | **84.0** | 0.227 | **40% worse** | 398 (best 197) | Does not beat the benchmark |
+| `c1_baseline` | 59.5 | **84.0** | 0.227 | not like-for-like &mdash; see above | 398 (best 197) | Overfit; a working pipeline, not yet a competitive model |
 | `c2_regularised` | — | — | — | — | — | not yet run |
 
 All test figures are on `grouped_split_v1`, 67 held-out brackets, vertical load case,
@@ -46,11 +87,11 @@ memorise 236 brackets and used it.
 
 The val/train loss ratio of **1.52** is the same statement in one number.
 
-**Read.** The model is **data-limited, not capacity-limited**. At 59.5 MPa it sits
-level with a polynomial that ignores geometry entirely, which by the paper's own
-standard is the threshold of having no predictive value. It learned *something* —
-R² 0.51 against 0 for a constant predictor — but not much that a positional prior
-does not already capture.
+**Read.** The model is **data-limited, not capacity-limited**. It learned something
+real — R² 0.51 on validation against 0 for a constant predictor — but on a stricter
+split, scoring only surface nodes, it does not yet clearly separate from a positional
+prior. With 236 training geometries and no regularisation to speak of, that is the
+expected outcome rather than a surprising one.
 
 **Cause of the overfit:** `weight_decay=1e-5` is effectively no regularisation.
 
@@ -64,9 +105,10 @@ does not already capture.
 | 95% CI on R² | [0.153, 0.305] | [0.327, 0.470] |
 | trivial baseline R² | −0.0001 | −0.0063 |
 
-**The model does not beat the paper's naive baseline.** 84.0 MPa against 60.1 MPa is
-40% worse, on a benchmark whose authors state that failing to beat it means having no
-predictive value. That is the honest headline.
+**84.0 MPa against a 60.1 MPa reference.** The two are not measured the same way — see
+the comparability table above — so this is not yet a clean win or loss. What is not in
+doubt is that the model overfit and that its errors concentrate where the paper's own
+authors say stress prediction is hardest.
 
 The official-split number is better but is **not** a fair comparison: the model was
 trained on the grouped split, so some of the official split's test brackets were in its
