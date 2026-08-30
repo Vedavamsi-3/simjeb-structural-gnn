@@ -33,7 +33,8 @@ from torch_geometric.utils import scatter
 
 
 def make_mlp(in_dim: int, hidden_dim: int, out_dim: int,
-             n_hidden_layers: int = 1, layer_norm: bool = True) -> nn.Sequential:
+             n_hidden_layers: int = 1, layer_norm: bool = True,
+             dropout: float = 0.0) -> nn.Sequential:
     """The MLP used everywhere in the network.
 
     ``LayerNorm`` on the output of every MLP except the decoder's. Without it, 15
@@ -42,8 +43,12 @@ def make_mlp(in_dim: int, hidden_dim: int, out_dim: int,
     value, not a latent state.
     """
     layers: list[nn.Module] = [nn.Linear(in_dim, hidden_dim), nn.ReLU()]
+    if dropout:
+        layers.append(nn.Dropout(dropout))
     for _ in range(n_hidden_layers - 1):
         layers += [nn.Linear(hidden_dim, hidden_dim), nn.ReLU()]
+        if dropout:
+            layers.append(nn.Dropout(dropout))
     layers.append(nn.Linear(hidden_dim, out_dim))
     if layer_norm:
         layers.append(nn.LayerNorm(out_dim))
@@ -61,12 +66,12 @@ class ProcessorBlock(nn.Module):
     at all -- the same reason ResNet uses them.
     """
 
-    def __init__(self, hidden_dim: int):
+    def __init__(self, hidden_dim: int, dropout: float = 0.0):
         super().__init__()
         # edge update sees: its own state, the sender's state, the receiver's state
-        self.edge_mlp = make_mlp(3 * hidden_dim, hidden_dim, hidden_dim)
+        self.edge_mlp = make_mlp(3 * hidden_dim, hidden_dim, hidden_dim, dropout=dropout)
         # node update sees: its own state, and the sum of messages arriving at it
-        self.node_mlp = make_mlp(2 * hidden_dim, hidden_dim, hidden_dim)
+        self.node_mlp = make_mlp(2 * hidden_dim, hidden_dim, hidden_dim, dropout=dropout)
 
     def forward(self, h: torch.Tensor, e: torch.Tensor,
                 edge_index: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -139,7 +144,7 @@ class MeshGraphNet(nn.Module):
 
     def __init__(self, node_dim: int, edge_dim: int = 4, hidden_dim: int = 64,
                  num_blocks: int = 8, out_dim: int = 1,
-                 use_checkpointing: bool = False):
+                 use_checkpointing: bool = False, dropout: float = 0.0):
         super().__init__()
         self.node_dim = node_dim
         self.edge_dim = edge_dim
@@ -159,7 +164,9 @@ class MeshGraphNet(nn.Module):
 
         self.node_encoder = make_mlp(node_dim, hidden_dim, hidden_dim)
         self.edge_encoder = make_mlp(edge_dim, hidden_dim, hidden_dim)
-        self.blocks = nn.ModuleList(ProcessorBlock(hidden_dim) for _ in range(num_blocks))
+        self.dropout = dropout
+        self.blocks = nn.ModuleList(
+            ProcessorBlock(hidden_dim, dropout) for _ in range(num_blocks))
         self.decoder = make_mlp(hidden_dim, hidden_dim, out_dim, layer_norm=False)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor,

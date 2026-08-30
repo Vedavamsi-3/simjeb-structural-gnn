@@ -80,6 +80,7 @@ class TrainConfig:
     # --- model ----------------------------------------------------------------
     hidden_dim: int = 64
     num_blocks: int = 8
+    dropout: float = 0.0
     use_checkpointing: bool = False
 
     # --- optimisation ---------------------------------------------------------
@@ -303,6 +304,7 @@ def train(config: TrainConfig) -> TrainResult:
         num_blocks=config.num_blocks,
         out_dim=feature_config.target_dim,
         use_checkpointing=config.use_checkpointing,
+        dropout=config.dropout,
     ).to(device)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr,

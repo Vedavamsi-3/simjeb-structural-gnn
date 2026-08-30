@@ -1,0 +1,26 @@
+{
+  "run_name": "c1_baseline",
+  "_intent": "First run. Establishes what the architecture does with light regularisation.",
+  "_date": "2026-08-29",
+
+  "load_case": "ver",
+  "use_material": true,
+  "use_position": false,
+  "use_aux_displacement": true,
+  "aux_weight": 0.2,
+  "log_stress": true,
+
+  "hidden_dim": 64,
+  "num_blocks": 8,
+  "dropout": 0.0,
+  "use_checkpointing": true,
+
+  "batch_size": 2,
+  "lr": 0.001,
+  "weight_decay": 1e-05,
+  "max_epochs": 3000,
+  "warmup_epochs": 5,
+  "patience": 200,
+  "max_hours": 10.5,
+  "seed": 0
+}

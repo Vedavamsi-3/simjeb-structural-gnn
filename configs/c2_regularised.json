@@ -1,0 +1,31 @@
+{
+  "run_name": "c2_regularised",
+  "_intent": "c1 overfit hard: it peaked at epoch 197 then trained 200 more epochs during which train loss fell 34% while validation loss rose. Only the regularisation changes; architecture, data and split are identical, so any difference is attributable.",
+  "_changes_from": "c1_baseline",
+  "_changed": {
+    "weight_decay": "1e-5 -> 1e-3, the binding constraint on 236 training shapes",
+    "dropout": "0.0 -> 0.1",
+    "patience": "200 -> 60, c1 wasted 3.6 GPU-hours past its peak"
+  },
+
+  "load_case": "ver",
+  "use_material": true,
+  "use_position": false,
+  "use_aux_displacement": true,
+  "aux_weight": 0.2,
+  "log_stress": true,
+
+  "hidden_dim": 64,
+  "num_blocks": 8,
+  "dropout": 0.1,
+  "use_checkpointing": true,
+
+  "batch_size": 2,
+  "lr": 0.001,
+  "weight_decay": 0.001,
+  "max_epochs": 3000,
+  "warmup_epochs": 5,
+  "patience": 60,
+  "max_hours": 10.5,
+  "seed": 0
+}
