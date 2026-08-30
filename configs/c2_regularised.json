@@ -1,19 +1,24 @@
 {
   "run_name": "c2_regularised",
-  "_intent": "c1 overfit hard: it peaked at epoch 197 then trained 200 more epochs during which train loss fell 34% while validation loss rose. Only the regularisation changes; architecture, data and split are identical, so any difference is attributable.",
+  "_intent": "c1 overfit hard and lost to the paper's naive baseline (84.0 vs 60.1 MPa). This changes everything that can be changed without touching the data, so it is a combined fix rather than a controlled ablation -- a deliberate trade, because each run costs ~7 GPU-hours and attribution is worth less than a working model right now.",
   "_changes_from": "c1_baseline",
   "_changed": {
-    "weight_decay": "1e-5 -> 1e-3, the binding constraint on 236 training shapes",
+    "weight_decay": "1e-5 -> 1e-3. c1's train loss fell 34% past its best epoch while validation rose; 1e-5 was effectively no regularisation.",
     "dropout": "0.0 -> 0.1",
-    "patience": "200 -> 60, c1 wasted 3.6 GPU-hours past its peak"
+    "patience": "200 -> 60. c1 spent 3.6 GPU-hours past its peak.",
+    "val_smoothing": "1 -> 10 epochs. c1 selected the minimum of 398 noisy validation scores, which is biased low -- most of why val MAE 59.5 became test MAE 84.0.",
+    "use_material": "true -> false. Ti-6Al-4V for every model, so the three columns were constant and carried exactly zero information.",
+    "huber_delta": "none -> 1.0. c1's RMSE was more than double its MAE and its worst brackets were those with peaks above 5x yield: a few singular nodes dominate the gradient even after log1p."
   },
+  "_prediction": "The train/val gap narrows and test MAE drops below 60.1. If it does not, the constraint is data volume rather than regularisation, and the next lever is recovering the 47 excluded rotation outliers or training on all four load cases.",
 
   "load_case": "ver",
-  "use_material": true,
+  "use_material": false,
   "use_position": false,
   "use_aux_displacement": true,
   "aux_weight": 0.2,
   "log_stress": true,
+  "huber_delta": 1.0,
 
   "hidden_dim": 64,
   "num_blocks": 8,
@@ -26,6 +31,7 @@
   "max_epochs": 3000,
   "warmup_epochs": 5,
   "patience": 60,
+  "val_smoothing": 10,
   "max_hours": 10.5,
   "seed": 0
 }
