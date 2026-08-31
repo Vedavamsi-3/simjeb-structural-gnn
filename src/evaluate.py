@@ -98,10 +98,6 @@ def load_checkpoint(path: str | Path, device: torch.device
         hidden_dim=config["hidden_dim"],
         num_blocks=config["num_blocks"],
         out_dim=feature_config.target_dim,
-        # Dropout has no parameters, but it is a layer inside nn.Sequential, so its
-        # presence shifts every later index. Rebuilding without it makes the saved
-        # weight names line up one position out. Older checkpoints predate the option.
-        dropout=config.get("dropout", 0.0),
     ).to(device)
     model.load_state_dict(state["model"])
     model.eval()

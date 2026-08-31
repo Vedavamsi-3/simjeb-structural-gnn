@@ -3,7 +3,8 @@
 Every training run gets a config in `configs/`, a row here, and its outputs committed
 under `outputs/<run_name>/`. Nothing is edited in place — a run that has happened is a
 fact, and changing the code that produced it retroactively would make the comparison
-meaningless.
+meaningless. That is why the planned changes below are described rather than already
+applied to the defaults.
 
 ## Benchmark
 
@@ -69,7 +70,6 @@ variable, but judgement rather than measurement.
 | run | val MAE | **test MAE** | test R² | vs. 60.1 baseline | epochs | verdict |
 |---|---|---|---|---|---|---|
 | `c1_baseline` | 59.5 | **84.0** | 0.227 | not like-for-like &mdash; see above | 398 (best 197) | Overfit; a working pipeline, not yet a competitive model |
-| `c2_regularised` | — | — | — | — | — | not yet run |
 
 All test figures are on `grouped_split_v1`, 67 held-out brackets, vertical load case,
 metrics in MPa after inverting the log transform.
@@ -125,8 +125,8 @@ Validation MAE 59.5 -> test MAE 84.0, a 41% degradation. Two causes, both struct
    best of 398 noisy validation scores; the minimum of noise sits below the true mean
    by roughly the noise scale, whatever the set size.
 
-Fixed for c2 by enlarging validation to 50 and stopping on a 10-epoch moving average
-rather than the raw value.
+The fix for both: enlarge the validation set and stop on a moving average of the
+validation loss rather than its raw per-epoch value.
 
 #### Where it fails, and why that is informative
 
@@ -156,30 +156,11 @@ training happened, from geometry and mesh statistics alone.
 And the trivial baseline scored −0.0001, i.e. exactly zero as designed. The evaluation
 is sound; the model is simply weak.
 
-### c2_regularised — planned
-
-Only the regularisation changes, so any difference is attributable to it.
-
-| | c1 | c2 |
-|---|---|---|
-| `weight_decay` | 1e-5 | **1e-3** |
-| `dropout` | 0.0 | **0.1** |
-| `patience` | 200 | **60** |
-
-Architecture, data, split and seed are identical.
-
-**Prediction, recorded before running:** the train/val gap narrows and validation MAE
-improves. If it does not, the problem is data volume rather than regularisation, and
-the next lever is recovering the 47 models excluded as rotation outliers (+20% data)
-or training on all four load cases.
-
-Writing the prediction down first is what makes the result informative either way.
-
 ## Planned work, in order
 
 Each is a separate run with its own config, so every change stays attributable.
 
-### 1. Recover the rotation outliers (`c3`)
+### 1. Recover the rotation outliers
 
 47 of 380 models -- 12% of the dataset -- were excluded on a 2 deg / 2 mm alignment
 tolerance. Median rotation across the whole dataset was 0.12 deg, so the dataset is
@@ -203,12 +184,14 @@ removing them is free.
 Predicted effect: no measurable change. Worth doing because it makes the feature set
 honest, not because it will help.
 
-### 3. Regularisation (`c2`, next)
+### 3. Regularisation
 
-`weight_decay` 1e-5 -> 1e-3, `dropout` 0 -> 0.1, `patience` 200 -> 60.
-Plus validation enlarged 25 -> 50 and early stopping on a 10-epoch moving average.
+`weight_decay` 1e-5 -> 1e-3, `dropout` 0 -> 0.1, and a shorter patience: the first
+run spent 3.6 GPU-hours training past its own peak. Validation should also be
+enlarged, and early stopping should compare a moving average rather than the raw
+per-epoch value.
 
-### 4. Huber loss on the log target (`c4`)
+### 4. Huber loss on the log target
 
 The evidence for this is specific: RMSE (174.6) is more than double MAE (84.0), and the
 worst-scoring brackets are exactly those with peaks above 5x yield. A small number of

@@ -77,16 +77,6 @@ class TrainConfig:
     aux_weight: float = 0.2
     log_stress: bool = True
 
-    # Huber transition point on the normalised log-stress target. None = plain MSE.
-    #
-    # The evidence for this is specific to c1's failure: RMSE (174.6) came out at more
-    # than double MAE (84.0), and the worst-scoring brackets were exactly those with
-    # peaks above 5x yield. A small number of singular nodes dominates the gradient
-    # even after log1p. Huber is quadratic near zero and linear in the tail, so a node
-    # that is wildly wrong contributes a bounded gradient -- the right shape for a
-    # target whose extremes are solver artefacts rather than physics worth fitting.
-    huber_delta: float | None = None
-
     # --- model ----------------------------------------------------------------
     hidden_dim: int = 64
     num_blocks: int = 8
@@ -104,12 +94,6 @@ class TrainConfig:
     # --- stopping -------------------------------------------------------------
     patience: int = 200          # epochs without validation improvement
     min_delta: float = 1e-5      # smaller than this does not count as improvement
-
-    # Early stopping compares a moving average rather than the raw validation loss.
-    # c1 took the minimum of 398 noisy scores, and the minimum of noise sits below the
-    # true mean by roughly the noise scale -- which is most of why its validation MAE
-    # (59.5) so badly under-predicted its test MAE (84.0).
-    val_smoothing: int = 10
     max_hours: float = 10.5      # leave margin inside a 12 h Kaggle session
 
     # --- learning-rate schedule ----------------------------------------------
@@ -185,17 +169,9 @@ def compute_loss(prediction: torch.Tensor, target: torch.Tensor,
     to shape the shared representation, not to compete with the objective being
     measured.
     """
-    if config.huber_delta:
-        stress_loss = F.huber_loss(prediction[:, 0], target[:, 0],
-                                   delta=config.huber_delta)
-    else:
-        stress_loss = F.mse_loss(prediction[:, 0], target[:, 0])
-
+    stress_loss = F.mse_loss(prediction[:, 0], target[:, 0])
     if not config.use_aux_displacement or prediction.shape[1] == 1:
         return stress_loss
-
-    # Displacement keeps plain MSE: it has no comparable tail, so there is nothing for
-    # Huber to protect against.
     disp_loss = F.mse_loss(prediction[:, 1:], target[:, 1:])
     return stress_loss + config.aux_weight * disp_loss
 
@@ -407,13 +383,9 @@ def train(config: TrainConfig) -> TrainResult:
         result.history.append(record)
         _write_history(out_dir / "history.csv", result.history)
 
-        # Compare the smoothed signal, not the raw epoch, so a single lucky epoch does
-        # not get selected as "best".
-        window = [r.val_loss for r in result.history[-config.val_smoothing:]]
-        smoothed = sum(window) / len(window)
-        improved = smoothed < result.best_val_loss - config.min_delta
+        improved = val_loss < result.best_val_loss - config.min_delta
         if improved:
-            result.best_val_loss = smoothed
+            result.best_val_loss = val_loss
             result.best_epoch = epoch
             epochs_without_improvement = 0
             torch.save(
